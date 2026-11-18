@@ -1,188 +1,200 @@
+# TUGAS PRAKTIKUM ALJABAR MATRIKS - MODUL 8
+# Topik: Proyeksi Ortogonal & Curve Fitting Regresi
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 
-def baca_file(file):
-    """Membaca file CSV atau Excel menjadi DataFrame."""
-    if file.name.lower().endswith(".csv"):
-        return pd.read_csv(file, sep=None, engine="python")
-    return pd.read_excel(file)
+# Set layout halaman web
+st.set_page_config(page_title="Modul 8 - Aljabar Matriks", layout="wide")
+st.title("Praktikum Aljabar Matriks (Modul 8)")
+st.caption("Eksplorasi Proyeksi Ortogonal, Pembuktian Geometri, & Regresi Linear via Normal Equation")
 
-def bangun_matriks(df, kolom_fitur, kolom_target, pakai_intersep):
-    """Membentuk matriks desain X dan vektor target y dari DataFrame."""
-    data = df[kolom_fitur + [kolom_target]].apply(pd.to_numeric, errors="raise")
-    if data.isnull().any().any():
-        raise ValueError("Terdapat sel kosong/NaN pada kolom yang dipilih.")
-    X = data[kolom_fitur].to_numpy(dtype=float)
-    y = data[kolom_target].to_numpy(dtype=float)
-    nama_w = [f"w{i+1}" for i in range(len(kolom_fitur))]
-    if pakai_intersep:
-        X = np.column_stack([np.ones(len(X)), X])  # tambah kolom 1 di kiri
-        nama_w = ["w0"] + nama_w
-    return X, y, nama_w
+# Menu navigasi samping
+pilihan_menu = st.sidebar.selectbox(
+    "Pilih Menu Praktikum:", 
+    ["1. Bukti Geometri (Soal No. 3)", "2. Curve Fitting Regresi Mandiri (Soal No. 4 & 5)"]
+)
 
-def selesaikan_cramer(X, y):
-    """Menyelesaikan (X^T X) w = X^T y dengan ATURAN CRAMER.
-    w_j = det(A_j) / det(A) dengan A_j adalah matriks A yang kolom ke-j
-    diganti oleh vektor b.
-    """
-    XtX = X.T @ X
-    Xty = X.T @ y
-    det_A = float(np.linalg.det(XtX))
+# Fungsi utama buat hitung regresi dan proyeksi
+def hitung_regresi_matriks(fitur_x, target_y):
+    arr_x = np.asarray(fitur_x, dtype=float)
+    arr_y = np.asarray(target_y, dtype=float)
+    
+    # Bikin matriks X dengan kolom angka 1 di kiri untuk intersep w0
+    matriks_X = np.column_stack([np.ones(len(arr_x)), arr_x])   
+    
+    # Cari bobot w pake normal equation: (X^T * X) * w = X^T * y
+    koef_w = np.linalg.solve(matriks_X.T @ matriks_X, matriks_X.T @ arr_y)       
+    
+    vektor_p = matriks_X @ koef_w
+    vektor_galat = arr_y - vektor_p
+    
+    return matriks_X, koef_w, vektor_p, vektor_galat
 
-    # det(A) = 0 -> Cramer tidak dapat dipakai (A singular)
-    if np.linalg.matrix_rank(XtX) < XtX.shape[0] or abs(det_A) < 1e-9:
-        raise ValueError(
-            "det(X^T X) = 0: matriks XTX singular sehingga aturan Cramer tidak dapat "
-            "dipakai. Kemungkinan ada fitur yang saling bergantung linear atau "
-            "jumlah sampel kurang dari jumlah parameter."
-        )
 
-    n = XtX.shape[0]
-    det_Aj = []
-    matriks_Aj = []
-    w = np.zeros(n)
+# Menu 1: Bukti Geometri (Soal No. 3)
+if pilihan_menu == "1. Bukti Geometri (Soal No. 3)":
+    st.subheader("Pembuktian Geometri Proyeksi & Vektor Ortogonal")
+    st.write("Bagian ini membuktikan perhitungan geometri menggunakan titik data (1, 1), (2, 3), dan (3, 4) sesuai petunjuk modul.")
 
-    for j in range(n):
-        Aj = XtX.copy()
-        Aj[:, j] = Xty
-        d = float(np.linalg.det(Aj))
-        matriks_Aj.append(Aj)
-        det_Aj.append(d)
-        w[j] = d / det_A
+    if st.button("Mulai Proses Pembuktian", type="primary"):
+        x_titik = [1, 2, 3]
+        y_titik = [1, 3, 4]
 
-    return XtX, Xty, w, det_A, det_Aj, matriks_Aj
+        X, w, P, e = hitung_regresi_matriks(x_titik, y_titik)
+        basis_c1, basis_c2 = X[:, 0], X[:, 1]
 
-st.set_page_config(page_title="SPL Regresi Linear - Cramer", layout="wide")
-st.title("Penyelesaian SPL dengan Aturan Cramer")
-st.caption("Regresi linear berganda melalui normal equation: (XTX) w = X^T y | "
-           "Metode: Cramer | Sveta Restyarsa Tisnandaru")
+        kol1, kol2 = st.columns(2)
+        with kol1:
+            st.write("**Matriks Desain X (Basis c1 & c2)**")
+            st.dataframe(pd.DataFrame(X, columns=["c1 (Intersep)", "c2 (Data x)"]))
+        with kol2:
+            st.write("**Vektor Target y**")
+            st.dataframe(pd.DataFrame(y_titik, columns=["y"]))
 
-file = st.file_uploader("Unggah file data (CSV / Excel)", type=["csv", "xlsx", "xls"])
+        st.subheader("Hasil Solusi Analitis")
+        kol3, kol4 = st.columns(2)
+        with kol3:
+            st.write("**Koefisien Bobot (w)**")
+            st.dataframe(pd.DataFrame({"Parameter": ["w0", "w1"], "Nilai": np.round(w, 4)}), hide_index=True)
+        with kol4:
+            st.write("**Titik Proyeksi P & Vektor Galat e**")
+            st.dataframe(pd.DataFrame({"Titik P": np.round(P, 4), "Galat e": np.round(e, 4)}), hide_index=True)
 
-if file is not None:
-    try:
-        df = baca_file(file)
-    except Exception as e:
-        st.error(f"Gagal membaca file: {e}")
-        st.stop()
+        st.subheader("Uji Ortogonalitas (Dot Product)")
+        cek_c1_e = basis_c1 @ e
+        cek_c2_e = basis_c2 @ e
+        
+        m_a, m_b = st.columns(2)
+        m_a.metric("Hasil c1 . e", f"{cek_c1_e:.2e}")
+        m_b.metric("Hasil c2 . e", f"{cek_c2_e:.2e}")
 
-    st.subheader("1. Data yang diunggah")
-    st.dataframe(df)
+        v_1 = basis_c1.copy()
+        v_2 = basis_c2 - (basis_c2 @ v_1) / (v_1 @ v_1) * v_1
+        y_arr = np.array(y_titik, dtype=float)
+        P_gs = (y_arr @ v_1) / (v_1 @ v_1) * v_1 + (y_arr @ v_2) / (v_2 @ v_2) * v_2
 
-    kolom_numerik = df.select_dtypes(include="number").columns.tolist()
-    if len(kolom_numerik) < 2:
-        st.error("Data harus memiliki minimal 2 kolom numerik (fitur dan target).")
-        st.stop()
+        st.success(f"Apakah hasil Normal Equation konsisten dengan metode Gram-Schmidt? **{np.allclose(P_gs, P)}**")
 
-    st.subheader("2. Pilih variabel")
-    col1, col2 = st.columns(2)
-    with col1:
-        kolom_target = st.selectbox(
-            "Kolom target (y)", kolom_numerik, index=len(kolom_numerik) - 1
-        )
-    with col2:
-        abaikan = ("sampel", "no", "id", "nomor")
-        default_fitur = [
-            k for k in kolom_numerik
-            if k != kolom_target and k.lower() not in abaikan
-        ]
-        kolom_fitur = st.multiselect(
-            "Kolom fitur (x)", [k for k in kolom_numerik if k != kolom_target],
-            default=default_fitur,
-        )
 
-    pakai_intersep = st.checkbox("Tambahkan intersep (w0)", value=True)
-
-    if st.button("Selesaikan", type="primary"):
-        try:
-            if not kolom_fitur:
-                raise ValueError("Pilih minimal satu kolom fitur.")
-            X, y, nama_w = bangun_matriks(df, kolom_fitur, kolom_target, pakai_intersep)
-            XtX, Xty, w, det_A, det_Aj, matriks_Aj = selesaikan_cramer(X, y)
-            st.session_state["hasil"] = dict(
-                file=file.name, fitur=kolom_fitur, target=kolom_target,
-                X=X, y=y, nama_w=nama_w, XtX=XtX, Xty=Xty, w=w,
-                det_A=det_A, det_Aj=det_Aj, matriks_Aj=matriks_Aj,
-                intersep=pakai_intersep,
-            )
-        except Exception as e:
-            st.session_state.pop("hasil", None)
-            st.error(f"Terjadi kesalahan: {e}")
-
-    h = st.session_state.get("hasil")
-    if h and h["file"] == file.name:
-        X, y, w, nama_w = h["X"], h["y"], h["w"], h["nama_w"]
-        w = w + 0.0  # menghindari tampilan -0.0
-
-        st.subheader("3. Langkah perhitungan")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Matriks desain X**")
-            st.dataframe(pd.DataFrame(X, columns=nama_w if h["intersep"] else h["fitur"]))
-        with c2:
-            st.markdown("**Vektor y**")
-            st.dataframe(pd.DataFrame(y, columns=[h["target"]]))
-
-        c3, c4 = st.columns(2)
-        with c3:
-            st.markdown("**XTX (matriks koefisien A)**")
-            st.dataframe(pd.DataFrame(h["XtX"], index=nama_w, columns=nama_w))
-        with c4:
-            st.markdown("**XTy (ruas kanan b)**")
-            st.dataframe(pd.DataFrame(h["Xty"], index=nama_w, columns=["XTy"]))
-
-        st.markdown("**Aturan Cramer: w_j = det(A_j) / det(A)**")
-        st.metric("det(A) = det(XTX)", f"{h['det_A']:.4f}")
-        tabel_cramer = pd.DataFrame({
-            "parameter": nama_w,
-            "det(A_j)": np.round(np.array(h["det_Aj"]) + 0.0, 4),
-            "w_j = det(A_j) / det(A)": np.round(w, 4),
-        })
-        st.dataframe(tabel_cramer, hide_index=True)
-
-        with st.expander("Lihat matriks A_j (kolom ke-j diganti b)"):
-            for nama, Aj in zip(nama_w, h["matriks_Aj"]):
-                st.markdown(f"**A_j untuk {nama}**")
-                st.dataframe(pd.DataFrame(Aj, columns=nama_w))
-
-        st.subheader("4. Solusi w")
-        hasil_w = pd.DataFrame({"parameter": nama_w, "nilai": np.round(w, 4)})
-        st.dataframe(hasil_w, hide_index=True)
-
-        suku = []
-        for nama, nilai, fitur in zip(nama_w, w, ([None] + h["fitur"]) if h["intersep"] else h["fitur"]):
-            suku.append(f"{nilai:.4f}" if fitur is None else f"{nilai:.4f}*{fitur}")
-        st.info(f"Model: {h['target']} = " + " + ".join(suku))
-
-        y_hat = X @ w
-        galat = y - y_hat
-        sse = float(np.sum(galat ** 2))
-        sst = float(np.sum((y - y.mean()) ** 2))
-        r2 = 1 - sse / sst if sst > 0 else float("nan")
-
-        m1, m2 = st.columns(2)
-        m1.metric("RMSE", f"{np.sqrt(np.mean(galat ** 2)):.4f}")
-        m2.metric("R2", f"{r2:.4f}")
-
-        st.markdown("**Perbandingan nilai aktual dan prediksi**")
-        df_pred = pd.DataFrame({"aktual": y, "prediksi": np.round(y_hat, 4),
-                                "galat": np.round(galat, 4)})
-        st.dataframe(df_pred)
-
-        st.download_button(
-            "Unduh hasil prediksi (CSV)",
-            df_pred.to_csv(index=False).encode("utf-8"),
-            file_name="hasil_prediksi.csv", mime="text/csv",
-        )
-
-        # Prediksi data baru
-        st.subheader("5. Prediksi data baru")
-        nilai_baru = []
-        kolom_in = st.columns(len(h["fitur"]))
-        for kol, nama in zip(kolom_in, h["fitur"]):
-            nilai_baru.append(kol.number_input(nama, value=float(df[nama].mean())))
-        x_baru = np.array(([1.0] if h["intersep"] else []) + nilai_baru)
-        st.success(f"Prediksi {h['target']} = {float(x_baru @ w):.2f}")
+# Menu 2: Curve Fitting & Regresi (Soal No. 4 & 5)
 else:
-    st.info("Silakan unggah file CSV/Excel terlebih dahulu. Contoh: data_rumah.csv")
+    st.subheader("Curve Fitting Regresi Linear & Analisis Residual")
+    st.write("Gunakan dataset bawaan studi kasus jam belajar atau unggah file CSV/Excel milikmu sendiri.")
+
+    opsi_sumber = st.radio("Pilih Sumber Data:", ["Pakai Data Bawaan (Jam Belajar vs Nilai)", "Upload File (CSV / Excel)"])
+
+    data_frame = None
+    if opsi_sumber == "Upload File (CSV / Excel)":
+        berkas_user = st.file_uploader("Upload file datamu di sini:", type=["csv", "xlsx", "xls"])
+        if berkas_user is not None:
+            try:
+                if berkas_user.name.lower().endswith(".csv"):
+                    data_frame = pd.read_csv(berkas_user, sep=None, engine="python")
+                else:
+                    data_frame = pd.read_excel(berkas_user)
+            except Exception as err:
+                st.error(f"Gagal baca file: {err}")
+                st.stop()
+    else:
+        data_frame = pd.DataFrame({
+            "jam_belajar": [1, 2, 3, 4, 5, 6, 7, 8],
+            "nilai_ujian": [52, 55, 61, 64, 70, 72, 79, 83]
+        })
+
+    if data_frame is not None:
+        st.subheader("1. Preview Tabel Data")
+        st.dataframe(data_frame)
+
+        kolom_angka = data_frame.select_dtypes(include="number").columns.tolist()
+        if len(kolom_angka) < 2:
+            st.error("Minimal harus ada 2 kolom numerik pada dataset.")
+            st.stop()
+
+        st.subheader("2. Pengaturan Variabel")
+        kc1, kc2 = st.columns(2)
+        with kc1:
+            target_kol = st.selectbox("Kolom Target (y)", kolom_angka, index=len(kolom_angka)-1)
+        with kc2:
+            default_f = [kol for kol in kolom_angka if kol != target_kol]
+            fitur_kol = st.multiselect("Kolom Fitur (x)", [kol for kol in kolom_angka if kol != target_kol], default=default_f)
+
+        pakai_w0 = st.checkbox("Sertakan Intersep (w0)", value=True)
+
+        if st.button("Hitung Model Regresi", type="primary"):
+            try:
+                if not fitur_kol:
+                    raise ValueError("Pilih minimal satu kolom fitur!")
+                
+                sub_data = data_frame[fitur_kol + [target_kol]].apply(pd.to_numeric, errors="raise")
+                X_fitur = sub_data[fitur_kol].to_numpy(dtype=float)
+                y_target = sub_data[target_kol].to_numpy(dtype=float)
+
+                nama_parameter = [f"w{i+1}" for i in range(len(fitur_kol))]
+                if pakai_w0:
+                    X_fitur = np.column_stack([np.ones(len(X_fitur)), X_fitur])
+                    nama_parameter = ["w0"] + nama_parameter
+
+                XtX_mat = X_fitur.T @ X_fitur
+                Xty_mat = X_fitur.T @ y_target
+                bobot_w = np.linalg.solve(XtX_mat, Xty_mat)
+                bobot_w = bobot_w + 0.0
+
+                st.session_state["cache_hasil"] = {
+                    "X": X_fitur, "y": y_target, "w": bobot_w, "nama_w": nama_parameter, 
+                    "fitur": fitur_kol, "target": target_kol, "intersep": pakai_w0
+                }
+            except Exception as ex:
+                st.error(f"Terjadi kendala: {ex}")
+
+        cache = st.session_state.get("cache_hasil")
+        if cache:
+            X, y, w, nama_w = cache["X"], cache["y"], cache["w"], cache["nama_w"]
+
+            st.subheader("3. Nilai Parameter Bobot (w)")
+            st.dataframe(pd.DataFrame({"Parameter": nama_w, "Nilai": np.round(w, 4)}), hide_index=True)
+
+            daftar_suku = []
+            kumpulan_fitur = ([None] + cache["fitur"]) if cache["intersep"] else cache["fitur"]
+            for label, val, ft in zip(nama_w, w, kumpulan_fitur):
+                daftar_suku.append(f"{val:.4f}" if ft is None else f"{val:.4f}·{ft}")
+            st.info(f"Persamaan Terbentuk: {cache['target']} = " + " + ".join(daftar_suku))
+
+            y_prediksi = X @ w
+            sisa_galat = y - y_prediksi
+            sum_sq_error = float(np.sum(sisa_galat ** 2))
+            sum_sq_total = float(np.sum((y - y.mean()) ** 2))
+            r_kuadrat = 1 - sum_sq_error / sum_sq_total if sum_sq_total > 0 else float("nan")
+
+            st.subheader("4. Analisis Residual & Galat (Soal No. 5)")
+            r1, r2, r3 = st.columns(3)
+            r1.metric("RMSE", f"{np.sqrt(np.mean(sisa_galat ** 2)):.4f}")
+            r2.metric("R² Score", f"{r_kuadrat:.4f}")
+            r3.metric("Total Penjumlahan Galat", f"{np.sum(sisa_galat):.2e}")
+
+            st.write("Penjelasan Singkat: Kenapa total galat bernilai nol? Karena adanya intersep (w0), vektor galat (e) dipastikan tegak lurus dengan kolom vektor basis pertama c1 (yang isinya angka 1). Akibatnya, hasil dot product c1 . e bernilai 0, yang secara aljabar sama persis dengan menjumlahkan seluruh elemen galat.")
+
+            st.write("**Tabel Perbandingan Aktual vs Prediksi & Galat**")
+            tabel_hasil = pd.DataFrame({
+                "Aktual": y, 
+                "Prediksi": np.round(y_prediksi, 4), 
+                "Galat (e)": np.round(sisa_galat, 4)
+            })
+            st.dataframe(tabel_hasil)
+
+            st.download_button(
+                "Unduh Hasil Prediksi (.csv)",
+                tabel_hasil.to_csv(index=False).encode("utf-8"),
+                file_name="hasil_regresi_modul8.csv", mime="text/csv"
+            )
+
+            st.subheader("5. Simulasi Prediksi Data Baru")
+            input_nilai = []
+            kol_input = st.columns(len(cache["fitur"]))
+            for kotak_input, nama_kolom in zip(kol_input, cache["fitur"]):
+                input_nilai.append(kotak_input.number_input(f"Masukkan {nama_kolom}", value=float(data_frame[nama_kolom].mean())))
+            
+            vektor_baru = np.array(([1.0] if cache["intersep"] else []) + input_nilai)
+            hasil_akhir = float(vektor_baru @ w)
+            st.success(f"Estimasi {cache['target']}: {hasil_akhir:.2f}")
